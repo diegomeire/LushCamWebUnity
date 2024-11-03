@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Unity Web Player | LushCamWeb</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+	
+	<script src="https://cdn.8thwall.com/web/xrextras/xrextras.js"></script>
+
+     <script async src="https://apps.8thwall.com/xrweb?appKey=4lNLHMCNLN5bFAOmjC06lR05bcrDXOAi1PBKK1Bs4paNbsVG5ADZkv2Yk8dlyFdo3H6CyE"></script>
+
+
+    <script src="//cdn.8thwall.com/web/aframe/8frame-1.4.1.min.js"></script>
+
+    <!-- XR Extras - provides utilities like load screen, almost there, and error handling.
+         See github.com/8thwall/web/tree/master/xrextras -->
+    <script src="//cdn.8thwall.com/web/xrextras/xrextras.js"></script>
+
+    <!-- Landing Pages - see https://www.8thwall.com/docs/web/#landing-pages -->
+    <script src='//cdn.8thwall.com/web/landing-page/landing-page.js'></script>
+
+    <!-- Coaching Overlay - see https://www.8thwall.com/docs/web/#sky-effects-coaching-overlay -->
+    <script src='https://cdn.8thwall.com/web/coaching-overlay/coaching-overlay.js'></script>
+	<script src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'></script>
+    <style>
+		body { padding: 0; margin: 0 }
+		#unity-container { position: fixed; width: 100%; height: 100%; }
+		#unity-canvas { width: 100%; height: 100%; background-color: transparent !important; }
+		#unity-loading-bar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none }
+		#unity-logo { width: 154px; height: 130px; background: url('unity-logo-dark.png') no-repeat center }
+		#unity-progress-bar-empty { margin-left: auto; margin-right: auto; width: 141px; height: 18px; margin-top: 10px; background: url('progress-bar-empty-dark.png') no-repeat center }
+		#unity-progress-bar-full { width: 0%; height: 18px; margin-top: 10px; background: url('progress-bar-full-dark.png') no-repeat center }
+		#unity-warning { position: absolute; left: 50%; top: 5%; transform: translate(-50%); background: white; padding: 10px; display: none }
+	</style>
+    <link rel="manifest" href="manifest.webmanifest">
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="camerafeed"></canvas>
+      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"> </div>
+    </div>
+    <script>
+		
+		// Copyright (c) 2018 8th Wall, Inc.
+		
+		let unityInstance = null
+
+		const onxrloaded = () => {
+		  XR8.FaceController.configure({
+		    meshGeometry: [
+		      XR8.FaceController.MeshGeometry.FACE,
+		      XR8.FaceController.MeshGeometry.EYES,
+		      XR8.FaceController.MeshGeometry.MOUTH,
+		    ],
+		    coordinates: {mirroredDisplay: true},
+		  })
+  
+		  console.log("Set up the Face Controller")
+
+		  XR8.addCameraPipelineModules([  // Add camera pipeline modules.
+		    XR8.GlTextureRenderer.pipelineModule(),      // Draws the camera feed.
+		    XR8.FaceController.pipelineModule(),
+		    XR8.CanvasScreenshot.pipelineModule(),  // Required for photo capture
+		    window.LandingPage.pipelineModule(),         // Detects unsupported browsers and gives hints.
+		    XRExtras.FullWindowCanvas.pipelineModule(),  // Modifies the canvas to fill the window.
+		    XRExtras.Loading.pipelineModule(),           // Manages the loading screen on startup.
+		    XRExtras.RuntimeError.pipelineModule(),      // Shows an error image on runtime error.
+		  ])
+
+		  console.log("Added the camera pipelines")
+
+
+  
+		  console.log("Started the XR8")
+  
+		 
+		  XR8.addCameraPipelineModule({
+		    name: 'camerastartupmodule',
+			  onException:  (error) => {
+		      console.error('XR threw an exception', error) },
+		    onCameraStatusChange: ({status}) => {
+				console.log("changed camera status: " + status)
+		    },
+		  })
+  
+  
+		  XR8.addCameraPipelineModule({
+		    name: 'myawesomeapp',
+	
+		    onUpdate: ({processCpuResult}) => {
+		
+		        const realitySource = processCpuResult.reality || processCpuResult.facecontroller ||
+		        processCpuResult.handcontroller || processCpuResult.layerscontroller
+
+		        if (!realitySource) {
+		          return
+		        }
+		        const {rotation, position, intrinsics} = realitySource
+				
+				
+				const intrinsicsArray = [
+				  intrinsics[0], intrinsics[1], intrinsics[2], intrinsics[3],
+				  intrinsics[4], intrinsics[5], intrinsics[6], intrinsics[7],
+				  intrinsics[8], intrinsics[9], intrinsics[10], intrinsics[11],
+				  intrinsics[12], intrinsics[13], intrinsics[14], intrinsics[15]
+				];
+			
+				
+				
+	  		    if (unityInstance != null) {
+	  		       unityInstance.SendMessage('FaceController', 'SetCameraIntrinsics', `${intrinsics[0]},${intrinsics[1]},${intrinsics[2]},${intrinsics[3]},${intrinsics[4]},${intrinsics[5]},${intrinsics[6]},${intrinsics[7]},${intrinsics[8]},${intrinsics[9]},${intrinsics[10]},${intrinsics[11]},${intrinsics[12]},${intrinsics[13]},${intrinsics[14]},${intrinsics[15]}`);
+	  		    }
+				
+				
+		    },
+	
+		    listeners: [
+		      {event: 'facecontroller.faceloading', process: init},
+		      {event: 'facecontroller.facefound', process: show},
+		      {event: 'facecontroller.faceupdated', process: show},
+		      {event: 'facecontroller.facelost', process: hide},
+		    ],
+		  });
+  
+
+  
+		  // Request camera permissions and run the camera.
+		  XR8.run({
+		    canvas: document.getElementById('camerafeed'),
+		    cameraConfig: {direction: XR8.XrConfig.camera().FRONT},
+		    allowedDevices: XR8.XrConfig.device().ANY,
+		  })
+		}
+
+		const init = () =>{
+			console.log("init")
+		}
+
+		const show = (event)  => {
+			//console.log(event.detail.transform.position)
+			
+  		    const x = event.detail.transform.position.x;
+  		    const y = event.detail.transform.position.y;
+  		    const z = event.detail.transform.position.z;
+			const rx = event.detail.transform.rotation.x;
+			const ry = event.detail.transform.rotation.y;
+			const rz = event.detail.transform.rotation.z;
+			const rw = event.detail.transform.rotation.w;
+			
+			
+  		    if (unityInstance != null) {
+  		       unityInstance.SendMessage('FaceController', 'SetTransform', `${x},${y},${z},${rx},${ry},${rz},${rw}`);
+  		    }
+		}
+
+		const hide = () => {
+  		    if (unityInstance != null) {
+  		       unityInstance.SendMessage('FaceController', 'Hide', '');
+  		    }
+		}
+
+		// Show loading screen before the full XR library has been loaded.
+		const load = () => { 
+			console.log("called load")
+			XRExtras.Loading.showLoading({onxrloaded})
+		}
+	
+		window.onload = () => { 	
+			window.XRExtras ? load() : window.addEventListener('xrextrasloaded', load) 
+		}
+
+
+		function captureScreenshot() {
+		    const cameraCanvas = document.getElementById("camerafeed");
+		    const unityCanvas = document.getElementById("unity-canvas");
+
+		    const width = unityCanvas.width;
+		    const height = unityCanvas.height;
+		    const offscreenCanvas = document.createElement("canvas");
+		    offscreenCanvas.width = width;
+		    offscreenCanvas.height = height;
+		    const ctx = offscreenCanvas.getContext("2d");
+
+		    ctx.drawImage(cameraCanvas, 0, 0, width, height);
+		    ctx.drawImage(unityCanvas, 0, 0, width, height);
+
+		 /*   offscreenCanvas.toBlob((blob) => {
+		        const link = document.createElement("a");
+		        link.href = URL.createObjectURL(blob);
+		        link.download = "screenshot.png";
+		        link.click();
+		    });*/
+			
+			const base64String = offscreenCanvas.toDataURL('image/png');
+		    if (unityInstance != null) {
+		        unityInstance.SendMessage('FaceController', 'OnReceiveScreenshot', base64String);
+		    }
+			
+
+		}
+		
+		
+		function receiveScreenshot(base64Image) {
+		    // Create a download link for the image
+		    const link = document.createElement("a");
+		    link.href = "data:image/png;base64," + base64Image;
+		    link.download = "WebGLScreenshot.png";
+		    link.click();
+		}
+		
+      window.addEventListener("load", function () {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("ServiceWorker.js");
+        }
+      });
+
+      var container = document.querySelector("#unity-container");
+      var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var progressBarFull = document.querySelector("#unity-progress-bar-full");
+      var warningBanner = document.querySelector("#unity-warning");
+
+      // Shows a temporary message banner/ribbon for a few seconds, or
+      // a permanent error message on top of the canvas if type=='error'.
+      // If type=='warning', a yellow highlight color is used.
+      // Modify or remove this function to customize the visually presented
+      // way that non-critical warnings and error messages are presented to the
+      // user.
+      function unityShowBanner(msg, type) {
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        else {
+          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          setTimeout(function() {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/LushCamWebUnity.loader.js";
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/LushCamWebUnity.data",
+        frameworkUrl: buildUrl + "/LushCamWebUnity.framework.js",
+        codeUrl: buildUrl + "/LushCamWebUnity.wasm",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "Lush",
+        productName: "LushCamWeb",
+        productVersion: "0.1.0",
+        showBanner: unityShowBanner,
+        webglContextAttributes: { preserveDrawingBuffer: true, alpha: true }
+      };
+
+      // By default Unity keeps WebGL canvas render target size matched with
+      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+      // Set this to false if you want to decouple this synchronization from
+      // happening inside the engine, and you would instead like to size up
+      // the canvas DOM size and WebGL render target sizes yourself.
+      // config.matchWebGLToCanvasSize = false;
+
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        // Mobile device style: fill the whole browser client area with the game canvas:
+        var meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+      }
+
+      loadingBar.style.display = "block";
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          progressBarFull.style.width = 100 * progress + "%";
+        }).then((ui) => {
+		  unityInstance = ui
+          loadingBar.style.display = "none";
+        }).catch((message) => {
+          alert(message);
+        });
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
