@@ -113,7 +113,6 @@
 		            mirrorContext.drawImage(background, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
 					mirrorContext.globalCompositeOperation = 'destination-over';
 		            mirrorContext.drawImage(cameraCanvas, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
-	                //mirrorContext.drawImage(maskBitmap, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
 	                mirrorContext.globalCompositeOperation = 'source-over';
 
             
@@ -175,7 +174,7 @@
 		  XR8.addCameraPipelineModule({
 		    name: 'myawesomeapp',
 			onStart: () =>{
-			  	startSegmentation()
+			  	//startSegmentation() commented out because it's too heavy on 
 			},
 	
 		    onUpdate: ({processCpuResult}) => {
