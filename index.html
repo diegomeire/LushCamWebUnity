@@ -23,6 +23,10 @@
     <!-- Coaching Overlay - see https://www.8thwall.com/docs/web/#sky-effects-coaching-overlay -->
     <script src='https://cdn.8thwall.com/web/coaching-overlay/coaching-overlay.js'></script>
 	<script src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'></script>
+    
+	<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
+    
     <style>
 		body { padding: 0; margin: 0 }
 		#unity-container { position: fixed; width: 100%; height: 100%; }
@@ -36,6 +40,7 @@
     <link rel="manifest" href="manifest.webmanifest">
   </head>
   <body>
+    <canvas id="camerafeedmirror" style="width: 100%; height: 100%; position: absolute "></canvas>
     <div id="unity-container">
       <canvas id="camerafeed"></canvas>
       <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
@@ -49,10 +54,85 @@
     </div>
     <script>
 		
+				
 		// Copyright (c) 2018 8th Wall, Inc.
 		
 		let unityInstance = null
+		
+		
+        async function loadModel() {
+             return await bodyPix.load();
+        }
+		
+		
+		async function startSegmentation() {
+		    const model = await loadModel(); // Load BodyPix model
 
+		    const cameraCanvas = document.getElementById('camerafeed'); // 8th Wall camera canvas
+		    const mirrorCanvas = document.getElementById('camerafeedmirror'); // Canvas to display segmented result
+		    const mirrorContext = mirrorCanvas.getContext('2d');
+
+		    // Set the dimensions of the mirror canvas to match the camera feed
+		    mirrorCanvas.width = window.innerWidth;//  cameraCanvas.width;
+		    mirrorCanvas.height = window.innerHeight;//cameraCanvas.height;
+
+		    const background = new Image();
+		    background.src = 'https://lumiere-a.akamaihd.net/v1/images/sa_pixar_virtualbg_coco_16x9_9ccd7110.jpeg?region=0,0,1920,1080&width=1536';
+
+		    const maskCanvas = document.createElement("canvas");
+		    const maskContext = maskCanvas.getContext("2d");
+
+		    async function renderFrame() {
+		        try {
+		            // Perform segmentation on the current frame from `cameraCanvas`
+		            const segmentation = await model.segmentPerson(cameraCanvas);
+		            if (!segmentation || !segmentation.data) {
+		                console.error("Segmentation data is invalid or empty.");
+		                requestAnimationFrame(renderFrame);
+		                return;
+		            }
+
+		            // Create a mask from the segmentation data
+		            const mask = bodyPix.toMask(segmentation);
+					console.log(mask)
+					
+		            
+		            if (!mask || !mask.data) {
+		                requestAnimationFrame(renderFrame);
+		                return;
+		            }
+					
+				
+
+		            // Ensure mask canvas is the same size as the mirrorCanvas
+		            maskCanvas.width = mirrorCanvas.width;
+		            maskCanvas.height = mirrorCanvas.height;
+					
+					mirrorContext.putImageData(mask, 0, 0);
+	                mirrorContext.globalCompositeOperation = 'source-in';
+		            mirrorContext.drawImage(background, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
+					mirrorContext.globalCompositeOperation = 'destination-over';
+		            mirrorContext.drawImage(cameraCanvas, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
+	                //mirrorContext.drawImage(maskBitmap, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
+	                mirrorContext.globalCompositeOperation = 'source-over';
+
+            
+		        } catch (error) {
+		            console.error("Segmentation error:", error);
+		        }
+
+		        // Continue the render loop
+		        requestAnimationFrame(renderFrame);
+		    }
+
+		    // Start the render loop when the background image is loaded
+		    background.onload = () => {
+		        renderFrame();
+		    };
+		}
+
+
+		
 		const onxrloaded = () => {
 		  XR8.FaceController.configure({
 		    meshGeometry: [
@@ -94,6 +174,9 @@
   
 		  XR8.addCameraPipelineModule({
 		    name: 'myawesomeapp',
+			onStart: () =>{
+			  	startSegmentation()
+			},
 	
 		    onUpdate: ({processCpuResult}) => {
 		
@@ -120,6 +203,32 @@
 	  		    }
 				
 				
+		       // mirrorContext.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+
+		        // Example: Draw a custom overlay or effect on the camera feed
+//		        mirrorContext.fillStyle = 'rgba(255, 0, 0, 0.5)';  // Semi-transparent red
+//		        mirrorContext.fillRect(50, 50, 100, 100);  // Draw a rectangle overlay
+				
+				
+				/*
+			    // Example: Applying a custom effect or modification
+			    const cameraCanvas = document.getElementById('camerafeed');
+			    const context = cameraCanvas.getContext('2d');
+				
+				console.log(context)
+				if (context != null){
+					console.log("not null")
+				    // Example: Clear the previous frame
+				    context.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+
+				    // Example: Draw a custom overlay or effect on the camera feed
+				    context.fillStyle = 'rgba(255, 0, 0, 0.5)';  // Semi-transparent red
+				    context.fillRect(50, 50, 100, 100);  // Draw a rectangle overlay
+				}
+				*/
+
+				
+				
 		    },
 	
 		    listeners: [
@@ -139,6 +248,17 @@
 		    allowedDevices: XR8.XrConfig.device().ANY,
 		  })
 		}
+		
+		
+		function sendCameraFrameToUnity() {
+		  const cameraCanvas = document.getElementById('camerafeed'); // Your camera feed canvas
+		  const context = cameraCanvas.getContext('2d');
+		  console.log(context)
+
+		}
+
+		// Call this function at intervals to continuously send frames, e.g., every 30ms
+		//setInterval(sendCameraFrameToUnity, 30);
 
 		const init = () =>{
 			console.log("init")
@@ -179,7 +299,7 @@
 
 
 		function captureScreenshot() {
-		    const cameraCanvas = document.getElementById("camerafeed");
+		    const cameraCanvas = document.getElementById("camerafeedmirror");
 		    const unityCanvas = document.getElementById("unity-canvas");
 
 		    const width = unityCanvas.width;
